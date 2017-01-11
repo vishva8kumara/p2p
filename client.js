@@ -147,7 +147,7 @@ var http = httpLib.createServer(
 				for (var i = 0; i < config.servers.length; i++)
 					new (function(i, q){
 						httpLib.request(
-							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q,
+							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},
 							function(response){
 								ideamart.handlePost(response, function(apiData){
 									output.push(apiData);
@@ -157,7 +157,7 @@ var http = httpLib.createServer(
 										res.end();
 									}
 								});
-							}})
+							})
 						.on('error', function(err){
 							console.log(err);
 						}).end();
