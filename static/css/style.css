@@ -1,0 +1,40 @@
+
+html, body{
+	margin:0px;
+	padding:0px;
+	font-family:arial,sans-serif;
+	background-color:#FFFFFF;
+}
+
+h1{
+	margin:5px 0px;
+	font-size:20pt;
+}
+h2{
+	margin:3px;
+	font-size:16pt;
+}
+
+a{
+	text-decoration:none;
+}
+
+nav{
+	background-color:#406088;
+	color:#FFFFFF;
+}
+nav a{
+	color:#FFFFFF;
+}
+
+nav ul{
+	list-style-type:none;
+	padding:0px;
+	margin:0px;
+}
+
+nav ul li{
+	padding:4px;
+	margin:2px;
+	display:inline-block;
+}
