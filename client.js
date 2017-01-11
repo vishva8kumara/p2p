@@ -14,13 +14,16 @@ var users = {};
 //	First, find out our IP address
 var host = [false, false];
 var interfaces = os.networkInterfaces();
+//console.log(interfaces);
 for (var k in interfaces) {
 	for (var k2 in interfaces[k]) {
 		var address = interfaces[k][k2];
-		//console.log(address);
+//console.log(address);
 		if (!address.internal)
-			if (address.family === 'IPv4')
+			if (address.family === 'IPv4'){
 				host[0] = address.address;
+				config.username = address.mac.replace(/:/g, '');
+			}
 			//else if (address.family === 'IPv6')
 			//	host[1] = address.address;
 	}
@@ -44,6 +47,7 @@ else{
 			qrq: query users - request
 			qrs: query users - response
 			...
+		f: from
 		h: host
 		n: reequest reference number
 		o: object (response data)
@@ -75,6 +79,8 @@ keepAlive();
 function p2pHandler(username){
 }*/
 
+//	Handler to process a UDP request expecting a response
+//	and routing back to a callback - maintains reference numbers
 var udpt = new (function(){
 	var capsule = this;
 	var spool = {};
@@ -83,6 +89,8 @@ var udpt = new (function(){
 		if (capsule == this)
 			return new udpt.request(host, port, msg, callback);
 		//
+		if (capsule.ref > 99999)
+			capsule.ref = 0;
 		//	Create a reference number to handle response
 		var ref = (capsule.ref += 1);
 		msg.n = ref;
@@ -93,13 +101,18 @@ var udpt = new (function(){
 		udp.send(new Buffer(msg), 0, msg.length,
 			port, host, function(err, bytes){});
 	},
+	//	Dispatch response to callback
 	this.dispatch = function(host, port, message){
 		if (typeof spool[message.r] != 'undefined'){
+//console.log(spool[message.r]);
+			//	Verify if the response comes from where the request is sent to
 			if (spool[message.r][0] != host || spool[message.r][1] != port)
 				console.log('\033[91mResponder and origin mismatch\033[0m');
 			var callback = spool[message.r][2];
+			//	Remove the reference from index
 			delete spool[message.r];
 			delete message.r;
+			//	Callback
 			callback(message);
 		}
 	}
@@ -132,8 +145,18 @@ udp.on('message', function(message, remote){
 			udp.send(new Buffer(message), 0, message.length,
 				remote.port, remote.address, function(err, bytes){});*/
 		}
-		//	Connection request - Stage 1
+		//	Connection request - Stage 1	- Relay to stage 2
 		if (message.c == 'cr1'){
+			var fromUser = users[message.f];
+			var toUser = users[message.u];
+			message = JSON.stringify({c: 'cr2', u: message.f,
+									o: [fromUser.inner.host, fromUser.inner.port,
+									fromUser.outer.host, fromUser.outer.port]});
+			udp.send(new Buffer(message), 0, message.length,
+				toUser.outer.port, toUser.outer.host, function(err, bytes){});
+		}
+		//	Connection request - Stage 2
+		if (message.c == 'cr2'){
 		}
 	}
 	//	Request that needs a response
@@ -191,21 +214,39 @@ var http = httpLib.createServer(
 		else if (url[0] == 'users'){
 			var output = {};
 			res.writeHead(200, {'Content-Type': 'application/json'});
-			if (url.length > 2 && url[1] == 'search'){
-				var progress = 0;
-				for (var i = 0; i < config.servers.length; i++)
-					new (function(server){
-						new udpt.request(server, 6660,
-							{su: url[2]},
-							function(reply){
-								output[server] = reply;
-								progress += 1;
-								if (progress == config.servers.length){
-									res.write(JSON.stringify(output));
-									res.end();
-								}
-							});
-					})(config.servers[i]);	//	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
+			if (url.length > 2){
+				if (url[1] == 'search'){
+					var progress = 0;
+					for (var i = 0; i < config.servers.length; i++)
+						new (function(server){
+							new udpt.request(server, udpport,
+								{su: url[2]},
+								function(reply){
+									output[server] = reply;
+									progress += 1;
+									if (progress == config.servers.length){
+										res.write(JSON.stringify(output));
+										res.end();
+									}
+								});
+						})(config.servers[i]);	//	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
+				}
+				else if (url[1] == 'connect'){
+					var user = url[2].split('@');
+					if (config.username == user[0]){
+						res.write(JSON.stringify({error: 'You cannot connect p2p to yourself'}));
+						res.end();
+					}
+					else{
+						message = JSON.stringify({c: 'cr1', u: user[0], f: config.username});
+						udp.send(new Buffer(message), 0, message.length,
+							udpport, user[1], function(err, bytes){});
+						res.write(JSON.stringify({message: 'Connection request sent'}));
+						res.end();
+					}
+				}
+				else if (url[1] == 'remember'){
+				}
 			}
 			else{
 				//console.log('http: '+url+users);
@@ -232,6 +273,11 @@ var http = httpLib.createServer(
 		}
 		//	Settings - read-only
 		else if (url[0] == 'settings'){
+			handlePost(req, function(data){
+				//	To Do: Save to config.json ONCE authentication is done to access this web interface
+				if (typeof data.settings != 'undefined')
+					console.log('Settings Received:\n'+new Buffer(data.settings, 'base64').toString());
+			});
 			res.writeHead(200, {'Content-Type': 'application/json'});
 			res.write(JSON.stringify(config));
 			res.end();

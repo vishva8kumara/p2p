@@ -932,7 +932,7 @@ var arc = new (function(root){
 	var dom = function(obj){
 		//	Ensure this function is always called as a dynamic instance
 		if (this == window)
-			return new dom(url, options);
+			return new dom(obj);//url, options
 		this.obj = obj;
 		//
 		//	Shorthand for setting innerHTML
@@ -946,6 +946,7 @@ var arc = new (function(root){
 		//	Shorthand for appendChild
 		this.a = this.appendChild = function(child){
 			obj.appendChild(child);
+			return new dom(child);
 		};
 		//
 		//	Shorthand for prependChild
