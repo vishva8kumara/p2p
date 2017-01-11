@@ -14,11 +14,9 @@ var users = {};
 //	First, find out our IP address
 var host = [false, false];
 var interfaces = os.networkInterfaces();
-//console.log(interfaces);
 for (var k in interfaces) {
 	for (var k2 in interfaces[k]) {
 		var address = interfaces[k][k2];
-//console.log(address);
 		if (!address.internal)
 			if (address.family === 'IPv4'){
 				host[0] = address.address;
@@ -36,7 +34,6 @@ if (host[0] == false && host[1] == false)
 	console.log('\033[91mNo connection to outside\033[0m');
 else{
 	udp.bind(udpport, host[0]);
-	//console.log(host);
 }
 
 /*
@@ -99,7 +96,6 @@ var udpt = new (function(){
 		//	Create a reference number to handle response
 		var ref = (capsule.ref += 1);
 		msg.n = ref;
-//console.log('['+ref+']');
 		//	Store the callback with reference to call back when response cones
 		spool[ref] = [host, port, callback];
 		msg = JSON.stringify(msg);
@@ -114,7 +110,6 @@ var udpt = new (function(){
 	//	Dispatch response to callback
 	this.dispatch = function(host, port, message){
 		if (typeof spool[message.r] != 'undefined'){
-//console.log(spool[message.r]);
 			clearTimeout(spool[message.r][3]);
 			//	Verify if the response comes from where the request is sent to
 			if (spool[message.r][0] != host || spool[message.r][1] != port)
@@ -133,6 +128,8 @@ var udpt = new (function(){
 		if (capsule == this)
 			return new udpt.request(host, port, msg, callback);
 		//
+		p2pSpool[username] = this;
+		//	START P2P SESSION - p2pHandler
 	}
 })();
 
@@ -157,11 +154,12 @@ udp.on('message', function(message, remote){
 					delete users[username];
 				}, config.keepAliveTimeout);
 			})(message.u);
-			//
+			// ************************************************************
 			/*/	Send ack - no need - it works :-) (test 1)
 			message = JSON.stringify({c: 'ack', fqdn: config.fqdn});
 			udp.send(new Buffer(message), 0, message.length,
 				remote.port, remote.address, function(err, bytes){});*/
+			// ************************************************************
 		}
 		//	Connection request - Stage 1	- Relay to stage 2
 		if (message.c == 'cr1'){
@@ -180,7 +178,6 @@ udp.on('message', function(message, remote){
 		}
 		//	Connection request - Stage 2
 		if (message.c == 'cr2'){
-			//	START P2P SESSION - p2pHandler
 			new udpt.p2p(message.u, message.o);
 		}
 	}
@@ -191,11 +188,7 @@ udp.on('message', function(message, remote){
 		if (typeof message.su == 'string'){
 			for (var user in users)
 				if (user.indexOf(message.su) > -1)
-					output[user] = users[user].timestamp;/*new Buffer(
-									JSON.stringify(
-										[users[user].inner.host, users[user].inner.port,
-										users[user].outer.host, users[user].outer.port]
-									)).toString('base64');*/
+					output[user] = users[user].timestamp;
 		}
 		output = JSON.stringify(output);
 		udpSend(output, remote.address, remote.port);
@@ -204,14 +197,6 @@ udp.on('message', function(message, remote){
 	else if (typeof message.r != 'undefined'){
 		udpt.dispatch(remote.address, remote.port, message);
 	}
-	/*
-	else
-		udp.send(new Buffer(message), 0, message.length,
-			remote.port, remote.address, function(err, bytes){});
-	//
-	// Add the caller to the directory as well
-	directory[message] = {address: remote.address, port: remote.port};
-	*/
 });
 
 
@@ -241,28 +226,34 @@ var http = httpLib.createServer(
 			if (url.length > 2){
 				if (url[1] == 'search'){
 					var progress = 0;
+					//	Search on all immidiate origin servers
 					for (var i = 0; i < config.servers.length; i++)
 						new (function(server){
 							new udpt.request(server, udpport,
 								{su: url[2]},
 								function(err, reply){
+									//	Add to the final output/result
 									if (!err)
 										output[server] = reply;
 									progress += 1;
+									//	Write to response once we have all search results collected/aggregated
 									if (progress == config.servers.length){
 										res.write(JSON.stringify(output));
 										res.end();
 									}
 								});
-						})(config.servers[i]);	//	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
+						})(config.servers[i]);
+						// No we are not doing this in http	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
 				}
 				else if (url[1] == 'connect'){
 					var user = url[2].split('@');
 					if (config.username == user[0]){
+						//	That would be pretty ugly :D - no srsly..
 						res.write(JSON.stringify({error: 'You cannot connect p2p to yourself'}));
 						res.end();
 					}
 					else{
+						//	Initiate p2p connection chain reaction
 						message = JSON.stringify({c: 'cr1', u: user[0], f: config.username});
 						udpSend(message, user[1], udpport);
 						res.write(JSON.stringify({message: 'Connection request sent'}));
@@ -270,14 +261,14 @@ var http = httpLib.createServer(
 					}
 				}
 				else if (url[1] == 'remember'){
+					//	To Do: ADD THE USER TO A PHONE BOOK LIKE THING
 				}
 			}
 			else{
-				//console.log('http: '+url+users);
+				//	Just list all the users connected to this immidiate node
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
-						output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
-									[users[user].outer.host, users[user].outer.port]];//, users[user].timestamp
+						output[user] = users[user].timestamp;
 				res.write(JSON.stringify(output));
 				res.end();
 			}
