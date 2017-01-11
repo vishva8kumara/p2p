@@ -6,7 +6,7 @@ var qs = require('qs');
 var fs = require('fs');
 
 var config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'UTF-8'));
-var udpport = 6660;
+var udpport = 6660;//139.162.7.150
 
 var keepAliveTimer = false;
 var users = {};
@@ -96,7 +96,7 @@ udp.on('message', function(message, remote){
 			})(message.u);
 			//
 			/*/	Send ack
-			message = JSON.stringify({c: 'ack'});
+			message = JSON.stringify({c: 'ack', fqdn: config.fqdn});
 			udp.send(new Buffer(message), 0, message.length,
 				remote.port, remote.address, function(err, bytes){});*/
 		}
@@ -135,7 +135,6 @@ var http = httpLib.createServer(
 		}
 		//	List users or search on servers
 		else if (url[0] == 'users'){
-			console.log('http: '+url);
 			var output = [];
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
@@ -160,6 +159,7 @@ var http = httpLib.createServer(
 					})(i, url[2]);*/
 			}
 			else{
+				console.log('http: '+url);
 				res.writeHead(200, {'Content-Type': 'application/json'});
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
