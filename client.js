@@ -23,7 +23,7 @@ for (var k in interfaces) {
 			if (address.family === 'IPv4'){
 				host[0] = address.address;
 				if (typeof address.mac != 'undefined')
-				config.username = address.mac.replace(/:/g, '');
+					config.username = address.mac.replace(/:/g, '');
 			}
 			//else if (address.family === 'IPv6')
 			//	host[1] = address.address;
@@ -67,7 +67,10 @@ function keepAlive(){
 		//
 		for (var i = 0; i < config.servers.length; i++)
 			udp.send(new Buffer(message), 0, message.length,
-				udpport, config.servers[i], function(err, bytes){});
+				udpport, config.servers[i], function(err, bytes){
+					if (err)
+						console.log(err);
+				});
 		//
 		keepAliveTimer = setTimeout(function(){
 			keepAlive();
