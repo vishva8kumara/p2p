@@ -123,7 +123,6 @@ var http = httpLib.createServer(
 		url = url[0].split('/');
 		if (url[url.length-1] == '')
 			url.splice(url.length-1);
-		console.log('http: '+url);
 		//
 		//	Deliver base template
 		if (url.length == 0){
@@ -136,6 +135,7 @@ var http = httpLib.createServer(
 		}
 		//	List users or search on servers
 		else if (url[0] == 'users'){
+			console.log('http: '+url);
 			var output = [];
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
