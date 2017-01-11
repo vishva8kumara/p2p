@@ -22,6 +22,7 @@ for (var k in interfaces) {
 		if (!address.internal)
 			if (address.family === 'IPv4'){
 				host[0] = address.address;
+				if (typeof address.mac != 'undefined')
 				config.username = address.mac.replace(/:/g, '');
 			}
 			//else if (address.family === 'IPv6')
