@@ -6,8 +6,8 @@ var qs = require('qs');
 var fs = require('fs');
 
 var config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'UTF-8'));
+var udpport = 6660;
 
-var udpport = 6668;
 var keepAliveTimer = false;
 var users = {};
 
@@ -37,13 +37,14 @@ else{
 
 //	Keep-alive with identity server, another node similar to this
 function keepAlive(){
-	for (var i = 0; i < servers.length; i++)
+	for (var i = 0; i < config.servers.length; i++)
 		client.send(new Buffer(config.username), 0, config.username.length,
-			udpport, servers[i], function(err, bytes){});
+			udpport, config.servers[i], function(err, bytes){});
 	keepAliveTimer = setTimeout(function(){
 		keepAlive();
 	}, 12000);
 }
+keepAlive();
 
 
 // Receive incoming data on udpport
