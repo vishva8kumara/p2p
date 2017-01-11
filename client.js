@@ -185,7 +185,7 @@ var http = httpLib.createServer(
 		//	Settings - read-only
 		else if (url[0] == 'settings'){
 			res.writeHead(200, {'Content-Type': 'application/json'});
-			res.write(JSON.stringify({host: host, username: config.username}));
+			res.write(JSON.stringify(config));
 			res.end();
 		}
 		else{
