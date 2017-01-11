@@ -51,14 +51,18 @@ else{
 
 //	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
-	var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
-	console.log('Sending keep-alive');
-	for (var i = 0; i < config.servers.length; i++)
-		udp.send(new Buffer(message), 0, message.length,
-			udpport, config.servers[i], function(err, bytes){});
-	keepAliveTimer = setTimeout(function(){
-		keepAlive();
-	}, 12000);
+	if (config.servers.length > 0){
+		var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
+		console.log('Sending keep-alive');
+		//
+		for (var i = 0; i < config.servers.length; i++)
+			udp.send(new Buffer(message), 0, message.length,
+				udpport, config.servers[i], function(err, bytes){});
+		//
+		keepAliveTimer = setTimeout(function(){
+			keepAlive();
+		}, 12000);
+	}
 }
 keepAlive();
 
@@ -141,7 +145,7 @@ var http = httpLib.createServer(
 		}
 		//	List users or search on servers
 		else if (url[0] == 'users'){
-			var output = {};
+			var output = [];
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
@@ -149,7 +153,7 @@ var http = httpLib.createServer(
 						httpLib.request(
 							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},
 							function(response){
-								ideamart.handlePost(response, function(apiData){
+								handlePost(response, function(apiData){
 									output.push(apiData);
 									progress += 1;
 									if (progress == config.servers.length){
