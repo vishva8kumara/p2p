@@ -170,11 +170,11 @@ udp.on('message', function(message, remote){
 		if (typeof message.su == 'string'){
 			for (var user in users)
 				if (user.indexOf(message.su) > -1)
-					output[user] = new Buffer(
+					output[user] = users[user].timestamp;/*new Buffer(
 									JSON.stringify(
 										[users[user].inner.host, users[user].inner.port,
 										users[user].outer.host, users[user].outer.port]
-									)).toString('base64');
+									)).toString('base64');*/
 		}
 		output = JSON.stringify(output);
 		udp.send(new Buffer(output), 0, output.length,
