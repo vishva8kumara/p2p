@@ -95,10 +95,10 @@ udp.on('message', function(message, remote){
 				}, config.keepAliveTimeout);
 			})(message.u);
 			//
-			//	Send ack
+			/*/	Send ack
 			message = JSON.stringify({c: 'ack'});
 			udp.send(new Buffer(message), 0, message.length,
-				remote.port, remote.address, function(err, bytes){});
+				remote.port, remote.address, function(err, bytes){});*/
 		}
 		if (message.c == 'cr1'){
 		}
@@ -123,6 +123,7 @@ var http = httpLib.createServer(
 		url = url[0].split('/');
 		if (url[url.length-1] == '')
 			url.splice(url.length-1);
+		console.log('http: '+url);
 		//
 		//	Deliver base template
 		if (url.length == 0){
@@ -132,25 +133,6 @@ var http = httpLib.createServer(
 					res.write(data);
 					res.end();
 				});
-		}
-		//	Deliver static resources as is - later we can look into minification and caching
-		else if (url[0] == 'static'){
-			fs.readFile(__dirname+'/'+url.join('/'), 'utf8',
-				function(err, data) {
-					if (err){
-						console.log(err);
-						res.writeHead(404, {'Content-Type': 'text/html'});
-						res.end('<h1>404: Static File Not Found</h1>');
-					}
-					else
-						res.end(data);
-				});
-		}
-		//	Settings - read-only
-		else if (url[0] == 'settings'){
-			res.writeHead(200, {'Content-Type': 'application/json'});
-			res.write(JSON.stringify({host: host, username: config.username}));
-			res.end();
 		}
 		//	List users or search on servers
 		else if (url[0] == 'users'){
@@ -182,10 +164,29 @@ var http = httpLib.createServer(
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
 						output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
-									[users[user].outer.host, users[user].outer.port], users[user].timestamp];
+									[users[user].outer.host, users[user].outer.port]];//, users[user].timestamp
 				res.write(JSON.stringify(output));
 				res.end();
 			}
+		}
+		//	Deliver static resources as is - later we can look into minification and caching
+		else if (url[0] == 'static'){
+			fs.readFile(__dirname+'/'+url.join('/'), 'utf8',
+				function(err, data) {
+					if (err){
+						console.log(err);
+						res.writeHead(404, {'Content-Type': 'text/html'});
+						res.end('<h1>404: Static File Not Found</h1>');
+					}
+					else
+						res.end(data);
+				});
+		}
+		//	Settings - read-only
+		else if (url[0] == 'settings'){
+			res.writeHead(200, {'Content-Type': 'application/json'});
+			res.write(JSON.stringify({host: host, username: config.username}));
+			res.end();
 		}
 		else{
 			res.write(JSON.stringify({url: url, get: get}));
