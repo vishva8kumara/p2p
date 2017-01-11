@@ -53,7 +53,7 @@ client.on('message', function(message, remote){
 	console.log(remote.address + ': ' + message);
 	//
 	// Reply to incoming message by sending the directory. Whole directory for now
-	var message = JSON.stringify(directory);
+	message = JSON.parse(message);
 	if (typeof message.c == 'string'){
 		if (message.c == 'ka'){
 			if (typeof users[message.u] != 'undefined')
