@@ -21,8 +21,8 @@ for (var k in interfaces) {
 		if (!address.internal)
 			if (address.family === 'IPv4')
 				host[0] = address.address;
-			else if (address.family === 'IPv6')
-				host[1] = address.address;
+			//else if (address.family === 'IPv6')
+			//	host[1] = address.address;
 	}
 }
 
@@ -37,7 +37,7 @@ else{
 
 //	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
-	var message = JSON.stringify({c: 'ka', u: config.username, h: host});
+	var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
 	for (var i = 0; i < config.servers.length; i++)
 		client.send(new Buffer(message), 0, message.length,
 			udpport, config.servers[i], function(err, bytes){});
@@ -58,7 +58,9 @@ client.on('message', function(message, remote){
 		if (message.c == 'ka'){
 			if (typeof users[message.u] != 'undefined')
 				clearTimeout(users[message.u]['expire']);
-			users[message.u] = {inner: {hosts: message.h, port: udpport}, outer: {host: remote.address, port: remote.port}, timestamp: (new Date()).getTime()};
+			users[message.u] = {inner: {host: message.h, port: udpport},
+							outer: {host: remote.address, port: remote.port},
+							timestamp: (new Date()).getTime()};
 			new (function(username){
 				users[username]['expire'] = setTimeout(function(){
 					delete users[username];
@@ -117,8 +119,8 @@ var server = http.createServer(
 			res.writeHead(200, {'Content-Type': 'application/json'});
 			var output = {};
 			for (var user in users)
-				output[user] = [[users[user].inner.hosts[0], users[user].inner.hosts[1], users[user].inner.port],
-					[users[user].outer.host, users[user].outer.port], users[user].timestamp];
+				output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
+							[users[user].outer.host, users[user].outer.port], users[user].timestamp];
 			res.write(JSON.stringify(output));
 			res.end();
 		}
