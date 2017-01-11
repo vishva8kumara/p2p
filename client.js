@@ -97,9 +97,10 @@ var udpt = new (function(){
 		if (typeof spool[message.r] != 'undefined'){
 			if (spool[message.r][0] != host || spool[message.r][1] != port)
 				console.log('\033[91mResponder and origin mismatch\033[0m');
-			console.log(spool[message.r][2]);
-			console.log(message);
-			spool[message.r][2](message);
+			var callback = spool[message.r][2];
+			delete spool[message.r];
+			delete message.r;
+			callback(message);
 		}
 	}
 })();
@@ -137,18 +138,22 @@ udp.on('message', function(message, remote){
 	}
 	//	Request that needs a response
 	else if (typeof message.n != 'undefined'){
+		output = {r: message.n};
 		//	Search Users
 		if (typeof message.su == 'string'){
-			output = {r: message.n};
 			for (var user in users)
 				if (user.indexOf(message.su) > -1)
-					output[user] = [[users[user].inner.host, users[user].inner.port],
-								[users[user].outer.host, users[user].outer.port]];
-			output = JSON.stringify(output);
-			udp.send(new Buffer(output), 0, output.length,
-				remote.port, remote.address, function(err, bytes){});
+					output[user] = new Buffer(
+									JSON.stringify(
+										[users[user].inner.host, users[user].inner.port,
+										users[user].outer.host, users[user].outer.port]
+									)).toString('base64');
 		}
+		output = JSON.stringify(output);
+		udp.send(new Buffer(output), 0, output.length,
+			remote.port, remote.address, function(err, bytes){});
 	}
+	//	Response received for a request - route it back to relevent callback
 	else if (typeof message.r != 'undefined'){
 		udpt.dispatch(remote.address, remote.port, message);
 	}
@@ -185,36 +190,25 @@ var http = httpLib.createServer(
 		//	List users or search on servers
 		else if (url[0] == 'users'){
 			var output = {};
+			res.writeHead(200, {'Content-Type': 'application/json'});
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
-					new udpt.request(config.servers[i], 6660,
-						{su: url[2]},
-						function(reply){
-							res.write(JSON.stringify(reply));
-							res.end();
-						});
-					/*new (function(i, q){
-						httpLib.request(
-							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},
-							function(response){
-								handlePost(response, function(apiData){
-									output.push(apiData);
-									progress += 1;
-									if (progress == config.servers.length){
-										res.write(JSON.stringify(output));
-										res.end();
-									}
-								});
-							})
-						.on('error', function(err){
-							console.log(err);
-						}).end();
-					})(i, url[2]);*/
+					new (function(server){
+						new udpt.request(server, 6660,
+							{su: url[2]},
+							function(reply){
+								output[server] = reply;
+								progress += 1;
+								if (progress == config.servers.length){
+									res.write(JSON.stringify(output));
+									res.end();
+								}
+							});
+					})(config.servers[i]);	//	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
 			}
 			else{
 				//console.log('http: '+url+users);
-				res.writeHead(200, {'Content-Type': 'application/json'});
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
 						output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
