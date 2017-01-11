@@ -933,6 +933,7 @@ var arc = new (function(root){
 		//	Ensure this function is always called as a dynamic instance
 		if (this == window)
 			return new dom(url, options);
+		this.obj = obj;
 		//
 		//	Shorthand for setting innerHTML
 		this.html = this.HTML = function(innerHTML){

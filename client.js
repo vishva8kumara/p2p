@@ -1,6 +1,6 @@
 
 var dgram = require('dgram');
-var http = require("http");
+var httpLib = require("http");
 var os = require('os');
 var qs = require('qs');
 var fs = require('fs');
@@ -27,19 +27,34 @@ for (var k in interfaces) {
 }
 
 //	Create UDP socket to communicate p2p
-var client = dgram.createSocket('udp4');
+var udp = dgram.createSocket('udp4');
 if (host[0] == false && host[1] == false)
 	console.log('\033[91mNo connection to outside\033[0m');
 else{
-	client.bind(udpport, host[0]);
+	udp.bind(udpport, host[0]);
 	//console.log(host);
 }
+
+/*
+	message
+		c: command
+			ka: keep-alive
+			cr1: connect request stage 1
+			cr2: connect request stage 2
+			qrq: query users - request
+			qrs: query users - response
+			...
+		u: user
+		h: host
+		p: port
+*/
 
 //	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
 	var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
+	console.log('Sending keep-alive');
 	for (var i = 0; i < config.servers.length; i++)
-		client.send(new Buffer(message), 0, message.length,
+		udp.send(new Buffer(message), 0, message.length,
 			udpport, config.servers[i], function(err, bytes){});
 	keepAliveTimer = setTimeout(function(){
 		keepAlive();
@@ -48,8 +63,13 @@ function keepAlive(){
 keepAlive();
 
 
+var p2pSpool = {};
+function p2pHandler(username){
+}
+
+
 // Receive incoming data from a client on udpport
-client.on('message', function(message, remote){
+udp.on('message', function(message, remote){
 	console.log(remote.address + ':' + remote.port + ' - ' + message);
 	//
 	// Reply to incoming message by sending the directory. Whole directory for now
@@ -67,10 +87,12 @@ client.on('message', function(message, remote){
 				}, 45000);
 			})(message.u);
 		}
+		if (message.c == 'cr1'){
+		}
 	}
 	/*
 	else
-		client.send(new Buffer(message), 0, message.length,
+		udp.send(new Buffer(message), 0, message.length,
 			remote.port, remote.address, function(err, bytes){});
 	//
 	// Add the caller to the directory as well
@@ -80,7 +102,7 @@ client.on('message', function(message, remote){
 
 
 //	Web service interface
-var server = http.createServer(
+var http = httpLib.createServer(
 	function (req, res){
 		//	Parse URL and query string
 		var url = req.url.substring(1).split('?');
@@ -89,8 +111,8 @@ var server = http.createServer(
 		if (url[url.length-1] == '')
 			url.splice(url.length-1);
 		//
+		//	Deliver base template
 		if (url.length == 0){
-			//	Deliv er base template
 			fs.readFile(__dirname+'/views/base.html', 'utf8',
 				function(err, data) {
 					res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
@@ -98,6 +120,7 @@ var server = http.createServer(
 					res.end();
 				});
 		}
+		//	Deliver static resources as is - later we can look into minification and caching
 		else if (url[0] == 'static'){
 			fs.readFile(__dirname+'/'+url.join('/'), 'utf8',
 				function(err, data) {
@@ -110,19 +133,45 @@ var server = http.createServer(
 						res.end(data);
 				});
 		}
+		//	Settings - read-only
 		else if (url[0] == 'settings'){
 			res.writeHead(200, {'Content-Type': 'application/json'});
 			res.write(JSON.stringify({host: host, username: config.username}));
 			res.end();
 		}
+		//	List users or search on servers
 		else if (url[0] == 'users'){
-			res.writeHead(200, {'Content-Type': 'application/json'});
 			var output = {};
-			for (var user in users)
-				output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
-							[users[user].outer.host, users[user].outer.port], users[user].timestamp];
-			res.write(JSON.stringify(output));
-			res.end();
+			if (url.length > 2 && url[1] == 'search'){
+				var progress = 0;
+				for (var i = 0; i < config.servers.length; i++)
+					new (function(i, q){
+						httpLib.request(
+							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q,
+							function(response){
+								ideamart.handlePost(response, function(apiData){
+									output.push(apiData);
+									progress += 1;
+									if (progress == config.servers.length){
+										res.write(JSON.stringify(output));
+										res.end();
+									}
+								});
+							}})
+						.on('error', function(err){
+							console.log(err);
+						}).end();
+					})(i, url[2]);
+			}
+			else{
+				res.writeHead(200, {'Content-Type': 'application/json'});
+				for (var user in users)
+					if (url.length == 1 || user.indexOf(url[1]) > -1)
+						output[user] = [[users[user].inner.host, users[user].inner.port],//s[0], users[user].inner.hosts[1]
+									[users[user].outer.host, users[user].outer.port], users[user].timestamp];
+				res.write(JSON.stringify(output));
+				res.end();
+			}
 		}
 		else{
 			res.write(JSON.stringify({url: url, get: get}));
@@ -136,11 +185,38 @@ var server = http.createServer(
 		//
 	}
 );
-server.on('error',
+http.on('error',
 	function(e){
 		console.log('--------------------------------');
 		console.log('\033[91m'+e.errno+'\033[0m');
 	});
 
-server.listen(config.httpport);
+http.listen(config.httpport);
+
+
+//	Handler for multipart POST request/response body
+function handlePost(req, callback){
+	req.setEncoding('utf8');
+	var body = '';
+	req.on('data', function (data){
+		body += data;
+		//	Not receiving anything over 1Mb
+		if (body.length > 1e6)
+			req.connection.destroy();
+	});
+	req.on('end', function (data){
+		var post = body;
+		//	Try to parse/normalize body, either xformurlencoded or jsonencoded. hereafter it wouldn't make difference to us
+		try{
+			post = JSON.parse(post);
+		}
+		catch(e){
+			try{
+				post = qs.parse(post);
+			}
+			catch(e){}
+		}
+		callback(post);
+	});
+}
 
