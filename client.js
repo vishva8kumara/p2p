@@ -86,7 +86,7 @@ var udpt = new (function(){
 		//	Create a reference number to handle response
 		var ref = (capsule.ref += 1);
 		msg.n = ref;
-		console.log('['+ref+']');
+//console.log('['+ref+']');
 		//	Store the callback with reference to call back when response cones
 		spool[ref] = [host, port, callback];
 		msg = JSON.stringify(msg);
@@ -97,6 +97,8 @@ var udpt = new (function(){
 		if (typeof spool[message.r] != 'undefined'){
 			if (spool[message.r][0] != host || spool[message.r][1] != port)
 				console.log('\033[91mResponder and origin mismatch\033[0m');
+			console.log(spool[message.r][2]);
+			console.log(message);
 			spool[message.r][2](message);
 		}
 	}
@@ -137,7 +139,7 @@ udp.on('message', function(message, remote){
 	else if (typeof message.n != 'undefined'){
 		//	Search Users
 		if (typeof message.su == 'string'){
-			output = {};
+			output = {r: message.n};
 			for (var user in users)
 				if (user.indexOf(message.su) > -1)
 					output[user] = [[users[user].inner.host, users[user].inner.port],
@@ -187,8 +189,10 @@ var http = httpLib.createServer(
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
 					new udpt.request(config.servers[i], 6660,
-						{},
+						{su: url[2]},
 						function(reply){
+							res.write(JSON.stringify(reply));
+							res.end();
 						});
 					/*new (function(i, q){
 						httpLib.request(
