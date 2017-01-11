@@ -159,7 +159,7 @@ var http = httpLib.createServer(
 					})(i, url[2]);*/
 			}
 			else{
-				console.log('http: '+url);
+				console.log('http: '+url+users);
 				res.writeHead(200, {'Content-Type': 'application/json'});
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
