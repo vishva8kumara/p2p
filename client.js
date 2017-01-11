@@ -66,11 +66,7 @@ function keepAlive(){
 		console.log('Sending keep-alive');
 		//
 		for (var i = 0; i < config.servers.length; i++)
-			udp.send(new Buffer(message), 0, message.length,
-				udpport, config.servers[i], function(err, bytes){
-					if (err)
-						console.log(err);
-				});
+			udpSend(message, config.servers[i], udpport);
 		//
 		keepAliveTimer = setTimeout(function(){
 			keepAlive();
@@ -79,9 +75,14 @@ function keepAlive(){
 }
 keepAlive();
 
-/*var p2pSpool = {};
-function p2pHandler(username){
-}*/
+//	Send a one off UDP message
+function udpSend(message, host, port){
+	udp.send(new Buffer(message), 0, message.length,
+		port, host, function(err, bytes){
+			if (err)
+				console.log('\033[91m'+err+'\033[0m');
+		});
+}
 
 //	Handler to process a UDP request expecting a response
 //	and routing back to a callback - maintains reference numbers
@@ -102,13 +103,19 @@ var udpt = new (function(){
 		//	Store the callback with reference to call back when response cones
 		spool[ref] = [host, port, callback];
 		msg = JSON.stringify(msg);
-		udp.send(new Buffer(msg), 0, msg.length,
-			port, host, function(err, bytes){});
-	},
+		udpSend(msg, host, port);
+		new (function(ref){
+			spool[ref][3] = setTimeout(function(){
+				spool[ref][2](false, message);
+				delete spool[ref];
+			}, config.UDPTimeout);
+		})(ref);
+	};
 	//	Dispatch response to callback
 	this.dispatch = function(host, port, message){
 		if (typeof spool[message.r] != 'undefined'){
 //console.log(spool[message.r]);
+			clearTimeout(spool[message.r][3]);
 			//	Verify if the response comes from where the request is sent to
 			if (spool[message.r][0] != host || spool[message.r][1] != port)
 				console.log('\033[91mResponder and origin mismatch\033[0m');
@@ -117,8 +124,15 @@ var udpt = new (function(){
 			delete spool[message.r];
 			delete message.r;
 			//	Callback
-			callback(message);
+			callback(false, message);
 		}
+	};
+	//	Handle p2p sessions
+	var p2pSpool = {};
+	this.p2p = function(username, connectionMatrix){
+		if (capsule == this)
+			return new udpt.request(host, port, msg, callback);
+		//
 	}
 })();
 
@@ -153,14 +167,21 @@ udp.on('message', function(message, remote){
 		if (message.c == 'cr1'){
 			var fromUser = users[message.f];
 			var toUser = users[message.u];
+			//	Send requester connection details to destination user
 			message = JSON.stringify({c: 'cr2', u: message.f,
 									o: [fromUser.inner.host, fromUser.inner.port,
 									fromUser.outer.host, fromUser.outer.port]});
-			udp.send(new Buffer(message), 0, message.length,
-				toUser.outer.port, toUser.outer.host, function(err, bytes){});
+			udpSend(message, toUser.outer.host, toUser.outer.port);
+			//	Send destination connection details back to requester
+			message = JSON.stringify({c: 'cr2', u: message.u,
+									o: [toUser.inner.host, toUser.inner.port,
+									toUser.outer.host, toUser.outer.port]});
+			udpSend(message, fromUser.outer.host, fromUser.outer.port);
 		}
 		//	Connection request - Stage 2
 		if (message.c == 'cr2'){
+			//	START P2P SESSION - p2pHandler
+			new udpt.p2p(message.u, message.o);
 		}
 	}
 	//	Request that needs a response
@@ -177,8 +198,7 @@ udp.on('message', function(message, remote){
 									)).toString('base64');*/
 		}
 		output = JSON.stringify(output);
-		udp.send(new Buffer(output), 0, output.length,
-			remote.port, remote.address, function(err, bytes){});
+		udpSend(output, remote.address, remote.port);
 	}
 	//	Response received for a request - route it back to relevent callback
 	else if (typeof message.r != 'undefined'){
@@ -225,8 +245,9 @@ var http = httpLib.createServer(
 						new (function(server){
 							new udpt.request(server, udpport,
 								{su: url[2]},
-								function(reply){
-									output[server] = reply;
+								function(err, reply){
+									if (!err)
+										output[server] = reply;
 									progress += 1;
 									if (progress == config.servers.length){
 										res.write(JSON.stringify(output));
@@ -243,8 +264,7 @@ var http = httpLib.createServer(
 					}
 					else{
 						message = JSON.stringify({c: 'cr1', u: user[0], f: config.username});
-						udp.send(new Buffer(message), 0, message.length,
-							udpport, user[1], function(err, bytes){});
+						udpSend(message, user[1], udpport);
 						res.write(JSON.stringify({message: 'Connection request sent'}));
 						res.end();
 					}
