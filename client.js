@@ -50,7 +50,7 @@ keepAlive();
 
 // Receive incoming data from a client on udpport
 client.on('message', function(message, remote){
-	console.log(remote.address + ': ' + message);
+	console.log(remote.address + ':' + remote.port + ' - ' + message);
 	//
 	// Reply to incoming message by sending the directory. Whole directory for now
 	message = JSON.parse(message);
@@ -77,7 +77,7 @@ client.on('message', function(message, remote){
 });
 
 
-//	Web server interface
+//	Web service interface
 var server = http.createServer(
 	function (req, res){
 		//	Parse URL and query string
