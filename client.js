@@ -135,7 +135,7 @@ var http = httpLib.createServer(
 		}
 		//	List users or search on servers
 		else if (url[0] == 'users'){
-			var output = [];
+			var output = {};
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
@@ -159,7 +159,7 @@ var http = httpLib.createServer(
 					})(i, url[2]);*/
 			}
 			else{
-				console.log('http: '+url+users);
+				//console.log('http: '+url+users);
 				res.writeHead(200, {'Content-Type': 'application/json'});
 				for (var user in users)
 					if (url.length == 1 || user.indexOf(url[1]) > -1)
