@@ -35,10 +35,11 @@ else{
 	//console.log(host);
 }
 
-//	Keep-alive with identity server, another node similar to this
+//	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
+	var message = JSON.stringify({c: 'ka', u: config.username, h: host});
 	for (var i = 0; i < config.servers.length; i++)
-		client.send(new Buffer(config.username), 0, config.username.length,
+		client.send(new Buffer(message), 0, message.length,
 			udpport, config.servers[i], function(err, bytes){});
 	keepAliveTimer = setTimeout(function(){
 		keepAlive();
@@ -47,17 +48,32 @@ function keepAlive(){
 keepAlive();
 
 
-// Receive incoming data on udpport
+// Receive incoming data from a client on udpport
 client.on('message', function(message, remote){
-	console.log(remote.address + ':' + remote.port +' - ' + message);
+	console.log(remote.address + ': ' + message);
 	//
 	// Reply to incoming message by sending the directory. Whole directory for now
 	var message = JSON.stringify(directory);
-	client.send(new Buffer(message), 0, message.length,
-		remote.port, remote.address, function(err, bytes){});
+	if (typeof message.c == 'string'){
+		if (message.c == 'ka'){
+			if (typeof users[message.u] != 'undefined')
+				clearTimeout(users[message.u]['expire']);
+			users[message.u] = {inner: {hosts: message.h, port: udpport}, outer: {host: remote.address, port: remote.port}, timestamp: (new Date()).getTime()};
+			new (function(username){
+				users[username]['expire'] = setTimeout(function(){
+					delete users[username];
+				}, 45000);
+			})(message.u);
+		}
+	}
+	/*
+	else
+		client.send(new Buffer(message), 0, message.length,
+			remote.port, remote.address, function(err, bytes){});
 	//
 	// Add the caller to the directory as well
 	directory[message] = {address: remote.address, port: remote.port};
+	*/
 });
 
 
@@ -94,7 +110,7 @@ var server = http.createServer(
 		}
 		else if (url[0] == 'settings'){
 			res.writeHead(200, {'Content-Type': 'application/json'});
-			res.write(JSON.stringify({host: host, username: username}));
+			res.write(JSON.stringify({host: host, username: config.username}));
 			res.end();
 		}
 		else if (url[0] == 'users'){
