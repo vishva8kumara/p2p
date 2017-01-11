@@ -14,14 +14,14 @@ new arc.nav('connect', arc.q('#connect')[0],
 		var list = context.q('ul')[0];
 		var form = context.q('form')[0];
 		form.obj.onsubmit = function(){
-			new arc.ajax('users/'+this.q.value, {
+			/*new arc.ajax('users/'+this.q.value, {
 				callback: function(res){
 					data = res.data;
 					list.html('');
 					for (var user in data)
 						list.a(arc.elem('li', user));
 				}
-			});
+			});*/
 			new arc.ajax('users/search/'+this.q.value, {
 				callback: function(res){
 					data = res.data;

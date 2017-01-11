@@ -44,9 +44,13 @@ else{
 			qrq: query users - request
 			qrs: query users - response
 			...
-		u: user
 		h: host
+		n: reequest reference number
+		o: object (response data)
 		p: port
+		r: response reference number
+		su: search user
+		u: user
 */
 
 //	Keep-alive with identity server which is another node similar to this
@@ -67,11 +71,36 @@ function keepAlive(){
 }
 keepAlive();
 
-
-var p2pSpool = {};
+/*var p2pSpool = {};
 function p2pHandler(username){
-}
+}*/
 
+var udpt = new (function(){
+	var capsule = this;
+	var spool = {};
+	this.ref = 0;
+	this.request = function(host, port, msg, callback){
+		if (capsule == this)
+			return new udpt.request(host, port, msg, callback);
+		//
+		//	Create a reference number to handle response
+		var ref = (capsule.ref += 1);
+		msg.n = ref;
+		console.log('['+ref+']');
+		//	Store the callback with reference to call back when response cones
+		spool[ref] = [host, port, callback];
+		msg = JSON.stringify(msg);
+		udp.send(new Buffer(msg), 0, msg.length,
+			port, host, function(err, bytes){});
+	},
+	this.dispatch = function(host, port, message){
+		if (typeof spool[message.r] != 'undefined'){
+			if (spool[message.r][0] != host || spool[message.r][1] != port)
+				console.log('\033[91mResponder and origin mismatch\033[0m');
+			spool[message.r][2](message);
+		}
+	}
+})();
 
 // Receive incoming data from a client on udpport
 udp.on('message', function(message, remote){
@@ -95,13 +124,31 @@ udp.on('message', function(message, remote){
 				}, config.keepAliveTimeout);
 			})(message.u);
 			//
-			/*/	Send ack
+			/*/	Send ack - no need - it works :-) (test 1)
 			message = JSON.stringify({c: 'ack', fqdn: config.fqdn});
 			udp.send(new Buffer(message), 0, message.length,
 				remote.port, remote.address, function(err, bytes){});*/
 		}
+		//	Connection request - Stage 1
 		if (message.c == 'cr1'){
 		}
+	}
+	//	Request that needs a response
+	else if (typeof message.n != 'undefined'){
+		//	Search Users
+		if (typeof message.su == 'string'){
+			output = {};
+			for (var user in users)
+				if (user.indexOf(message.su) > -1)
+					output[user] = [[users[user].inner.host, users[user].inner.port],
+								[users[user].outer.host, users[user].outer.port]];
+			output = JSON.stringify(output);
+			udp.send(new Buffer(output), 0, output.length,
+				remote.port, remote.address, function(err, bytes){});
+		}
+	}
+	else if (typeof message.r != 'undefined'){
+		udpt.dispatch(remote.address, remote.port, message);
 	}
 	/*
 	else
@@ -139,7 +186,10 @@ var http = httpLib.createServer(
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
-					console.log('xTo Do.');
+					new udpt.request(config.servers[i], 6660,
+						{},
+						function(reply){
+						});
 					/*new (function(i, q){
 						httpLib.request(
 							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},
