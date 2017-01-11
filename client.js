@@ -115,7 +115,11 @@ var server = http.createServer(
 		}
 		else if (url[0] == 'users'){
 			res.writeHead(200, {'Content-Type': 'application/json'});
-			res.write(JSON.stringify(users));
+			var output = {};
+			for (var user in users)
+				output[user] = [[users[user].inner.hosts[0], users[user].inner.hosts[1], users[user].inner.port],
+					[users[user].outer.host, users[user].outer.port], users[user].timestamp];
+			res.write(JSON.stringify(output));
 			res.end();
 		}
 		else{
