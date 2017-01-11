@@ -87,6 +87,7 @@ udp.on('message', function(message, remote){
 							timestamp: (new Date()).getTime()};
 			new (function(username){
 				users[username]['expire'] = setTimeout(function(){
+					console.log('Removing user \''+username+'\' for inactivity.');
 					delete users[username];
 				}, 45000);
 			})(message.u);
