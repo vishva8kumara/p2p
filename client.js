@@ -51,6 +51,7 @@ else{
 
 //	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
+	//	Only if this node has upstream servers - not a top level introducer
 	if (config.servers.length > 0){
 		var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
 		console.log('Sending keep-alive');
@@ -61,7 +62,7 @@ function keepAlive(){
 		//
 		keepAliveTimer = setTimeout(function(){
 			keepAlive();
-		}, 12000);
+		}, config.keepAliveFreq);
 	}
 }
 keepAlive();
@@ -82,15 +83,22 @@ udp.on('message', function(message, remote){
 		if (message.c == 'ka'){
 			if (typeof users[message.u] != 'undefined')
 				clearTimeout(users[message.u]['expire']);
+			//	Add to directory
 			users[message.u] = {inner: {host: message.h, port: udpport},
 							outer: {host: remote.address, port: remote.port},
 							timestamp: (new Date()).getTime()};
+			//	Set Timeout to auto remove if inactive
 			new (function(username){
 				users[username]['expire'] = setTimeout(function(){
 					console.log('Removing user \''+username+'\' for inactivity.');
 					delete users[username];
-				}, 45000);
+				}, config.keepAliveTimeout);
 			})(message.u);
+			//
+			//	Send ack
+			message = JSON.stringify({c: 'ack'});
+			udp.send(new Buffer(message), 0, message.length,
+				remote.port, remote.address, function(err, bytes){});
 		}
 		if (message.c == 'cr1'){
 		}
@@ -150,7 +158,8 @@ var http = httpLib.createServer(
 			if (url.length > 2 && url[1] == 'search'){
 				var progress = 0;
 				for (var i = 0; i < config.servers.length; i++)
-					new (function(i, q){
+					console.log('xTo Do.');
+					/*new (function(i, q){
 						httpLib.request(
 							{port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},
 							function(response){
@@ -166,7 +175,7 @@ var http = httpLib.createServer(
 						.on('error', function(err){
 							console.log(err);
 						}).end();
-					})(i, url[2]);
+					})(i, url[2]);*/
 			}
 			else{
 				res.writeHead(200, {'Content-Type': 'application/json'});

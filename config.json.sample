@@ -1,5 +1,9 @@
 {
-	"servers": ['0.0.0.0'],
+	"fqdn": "",
+	"servers": ["0.0.0.0"],
 	"httpport": "8080",
-	"username": "vishva"
+	"username": "vishva",
+	"keepAliveFreq": 12000,
+	"keepAliveTimeout": 45000,
+	"UDPTimeout": 5000
 }
