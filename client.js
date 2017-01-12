@@ -52,6 +52,7 @@ else{
 		p: port
 		r: response reference number
 		su: search user
+		t: timestamp
 		u: user
 */
 
@@ -127,8 +128,55 @@ var udpt = new (function(){
 	this.p2p = function(username, connectionMatrix){
 		if (capsule == this)
 			return new udpt.request(host, port, msg, callback);
+		//this.isLAN = null;
+		this.peer = [false, false];
+		var _self = this;
 		//
 		p2pSpool[username] = this;
+		var fails = 0;
+		//	Attempt UDP hole punching
+		//	First try as a LAN peer
+		new udpt.request(connectionMatrix[0], connectionMatrix[1], {c: 'cr3', f: config.username},
+			function(err, msg){
+				if (!err)
+					startKeepAlive(connectionMatrix[0], connectionMatrix[1]);
+				else
+					oneFailed();
+			});
+		//	Then try as an outside peer
+		new udpt.request(connectionMatrix[2], connectionMatrix[3], {c: 'cr3', f: config.username},
+			function(err, msg){
+				if (!err)
+					startKeepAlive(connectionMatrix[2], connectionMatrix[3]);
+				else
+					oneFailed();
+			});
+		//	Display error if both methods failed
+		var oneFailed = function(){
+			fails += 1;
+			if (fails == 2)
+				console.log('\033[91mCannot reach host of \''+username+'\'. We blame it on your router, ISP or network admin.\033[0m');
+		}
+		//	Send keep alive messages to peer
+		var p2pKeepAliveTimer = false;
+		var startKeepAlive = function(host, port){
+			if (p2pKeepAliveTimer == false){
+				_self.peer = [host, port];
+				p2pKeepAlive();
+			}
+		}
+		var p2pKeepAlive = function(){
+			udpSend(JSON.stringify({c: 'ka', u: config.username, h: host[0], t: (new Date().getTime())}), _self.peer[0], _self.peer[1]);
+			p2pKeepAliveTimer = setTimeout(function(){
+				p2pKeepAlive();
+			}, config.keepAliveFreq);
+		}
+		//	Close the connection, stop keep-alive and clear any trace of this
+		this.close = function(){
+			clearTimeout(p2pKeepAliveTimer);
+			delete p2pSpool[username];
+			delete _self;
+		}
 		//	START P2P SESSION - p2pHandler
 	}
 })();
@@ -164,6 +212,7 @@ udp.on('message', function(message, remote){
 		//	Connection request - Stage 1	- Relay to stage 2
 		if (message.c == 'cr1'){
 			var fromUser = users[message.f];
+			var toUserName = message.u;
 			var toUser = users[message.u];
 			//	Send requester connection details to destination user
 			message = JSON.stringify({c: 'cr2', u: message.f,
@@ -171,7 +220,7 @@ udp.on('message', function(message, remote){
 									fromUser.outer.host, fromUser.outer.port]});
 			udpSend(message, toUser.outer.host, toUser.outer.port);
 			//	Send destination connection details back to requester
-			message = JSON.stringify({c: 'cr2', u: message.u,
+			message = JSON.stringify({c: 'cr2', u: toUserName,
 									o: [toUser.inner.host, toUser.inner.port,
 									toUser.outer.host, toUser.outer.port]});
 			udpSend(message, fromUser.outer.host, fromUser.outer.port);
