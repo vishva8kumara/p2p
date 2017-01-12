@@ -60,7 +60,7 @@ function keepAlive(){
 	//	Only if this node has upstream servers - not a top level introducer
 	if (config.servers.length > 0){
 		var message = JSON.stringify({c: 'ka', u: config.username, h: host[0]});
-		console.log('Sending keep-alive');
+		//console.log('Sending keep-alive');
 		//
 		for (var i = 0; i < config.servers.length; i++)
 			udpSend(message, config.servers[i], udpport);
@@ -102,7 +102,7 @@ var udpt = new (function(){
 		udpSend(msg, host, port);
 		new (function(ref){
 			spool[ref][3] = setTimeout(function(){
-				spool[ref][2](false, message);
+				spool[ref][2](false, '');
 				delete spool[ref];
 			}, config.UDPTimeout);
 		})(ref);
