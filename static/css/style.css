@@ -1,18 +1,20 @@
 
 html, body{
-	margin:0px;
+	margin:0px 3px;
 	padding:0px;
 	font-family:arial,sans-serif;
 	background-color:#FFFFFF;
 }
 
 h1{
-	margin:5px 0px;
-	font-size:20pt;
+	margin:4px 0px;
+	font-size:18pt;
+	color:#306058;
 }
 h2{
-	margin:3px;
+	margin:4px 0px;
 	font-size:16pt;
+	color:#206050;
 }
 
 a{
@@ -20,7 +22,10 @@ a{
 }
 
 nav{
-	background-color:#406088;
+	background-color:#408070;
+	border-top:1px solid #206050;
+	border-bottom:1px solid #206050;
+	margin:0px -6px;
 	color:#FFFFFF;
 }
 nav a{
@@ -37,4 +42,41 @@ nav ul li{
 	padding:4px;
 	margin:2px;
 	display:inline-block;
+}
+
+.frame{
+	position:absolute;
+	top:65px;
+	width:calc(100% - 6px);
+	height:calc(100vh - 66px);
+	opacity:0;
+	filter:blur(3px);
+	-webkit-filter:blur(3px);
+	-webkit-transition:opacity 0.5s, -webkit-filter 1s;
+	/*overflow:scroll;*/
+	overflow-y:scroll;
+	transition:opacity 0.5s, filter 1s;
+	box-sizing:border-box;
+}
+.frame.active{
+	filter:none;
+	-webkit-filter:none;
+	opacity:1;
+}
+
+.frame ul{
+	list-style-type:none;
+	margin:0px;
+	padding:0px;
+	border-bottom:1px solid #408070;
+}
+.frame ul li{
+	list-style-type:none;
+	margin:0px;
+	padding:4px 0px;
+	border-top:1px solid #408070;
+}
+.frame ul li ul{
+	margin-left:10px;
+	font-size:80%;
 }

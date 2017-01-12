@@ -1,4 +1,74 @@
 
+/*
+Author: Vishva Kuamra - vishva8kumara@gmail.com
+
+## README
+This has two interfaces; an HTTP/Web and a UDP for p2p. Web
+interface is meant to be a user interface to manage the node,
+connect to peers, view stats and manage stored data.
+
+This does not attempt to make UDP into a reliable protocol
+such as TCP in one sling shot.
+The unreliable nature of UDP is left as is in some places, but on
+some other places it is expanded to work in a req/resp manner,
+msg fragmentation and sometimes to work very similar to TCP
+as needed in each case.
+
+This Should NOT be abstracted down for all req/resp to follow
+the same level of reliability; that would defeat the whole purpose.
+
+The idea of having various levels of UDP reliability and response
+handling in various places on code - is to implement those
+features as needed for that specific purpose.
+
+For an example, a keep alive do not need a response, neither fragmentation.
+Connect request do need a response and callback. But neither of these cases
+need message fragmentation or buffering since these are small packets.
+Only when sending real data between peers we need all stars plus more.!
+Buffering, sequencing, ACK, compression, streaming, pushing, pulling,
+callbacks/callforwards and more.
+
+JSON is used as the data encapsulation. Below you will find a dictionary
+that specifies JSON attribute names used in this encapsulation.
+
+However, all UDP packets are sent out and received from the
+same socket/port on one place on code each. We can later change the
+encoding and/or port. Right now it is clear-text.
+
+## Things to do:
+* Implement encryption - at least base64
+* User authentication from an idap server, preferably info.lk
+* Device a way to protect user anonymity and/or privacy on the p2p network
+* Search query throttling and provisioning to prevent over-use of server
+* Buffered and sequenced (piggybacked ack) communucation between p2p links
+
+* Enable peers to create an asymmetric encryption key pair and publish the public key
+* Then re-do encryption to implement proper encryption
+
+* Data storage and indexing
+* Information publishing and lincensing
+
+## DICTIONARY
+	message
+		c: command
+			ka: keep-alive
+			cr1: connect request stage 1
+			cr2: connect request stage 2
+			qrq: query peers - request
+			qrs: query peers - response
+			...
+		f: from
+		h: host
+		n: reequest reference number
+		o: object (response data)
+		p: port
+		r: response reference number
+		su: search peer
+		t: timestamp
+		u: peer
+*/
+
+//	We want to keep these dependancies to the minimum
 var dgram = require('dgram');
 var httpLib = require("http");
 var os = require('os');
@@ -9,7 +79,7 @@ var config = JSON.parse(fs.readFileSync(__dirname+'/config.json', 'UTF-8'));
 var udpport = 6660;//139.162.7.150
 
 var keepAliveTimer = false;
-var users = {};
+var clients = {};
 
 //	First, find out our IP address
 var host = [false, false];
@@ -35,26 +105,6 @@ if (host[0] == false && host[1] == false)
 else{
 	udp.bind(udpport, host[0]);
 }
-
-/*
-	message
-		c: command
-			ka: keep-alive
-			cr1: connect request stage 1
-			cr2: connect request stage 2
-			qrq: query users - request
-			qrs: query users - response
-			...
-		f: from
-		h: host
-		n: reequest reference number
-		o: object (response data)
-		p: port
-		r: response reference number
-		su: search user
-		t: timestamp
-		u: user
-*/
 
 //	Keep-alive with identity server which is another node similar to this
 function keepAlive(){
@@ -163,6 +213,7 @@ var udpt = new (function(){
 			if (p2pKeepAliveTimer == false){
 				_self.peer = [host, port];
 				p2pKeepAlive();
+				//	TO DO: Exchange Public keys
 			}
 		}
 		var p2pKeepAlive = function(){
@@ -189,17 +240,17 @@ udp.on('message', function(message, remote){
 	message = JSON.parse(message);
 	if (typeof message.c == 'string'){
 		if (message.c == 'ka'){
-			if (typeof users[message.u] != 'undefined')
-				clearTimeout(users[message.u]['expire']);
+			if (typeof clients[message.u] != 'undefined')
+				clearTimeout(clients[message.u]['expire']);
 			//	Add to directory
-			users[message.u] = {inner: {host: message.h, port: udpport},
+			clients[message.u] = {inner: {host: message.h, port: udpport},
 							outer: {host: remote.address, port: remote.port},
 							timestamp: (new Date()).getTime()};
 			//	Set Timeout to auto remove if inactive
 			new (function(username){
-				users[username]['expire'] = setTimeout(function(){
-					console.log('Removing user \''+username+'\' for inactivity.');
-					delete users[username];
+				clients[username]['expire'] = setTimeout(function(){
+					console.log('Removing peer \''+username+'\' for inactivity.');
+					delete clients[username];
 				}, config.keepAliveTimeout);
 			})(message.u);
 			// ************************************************************
@@ -211,10 +262,10 @@ udp.on('message', function(message, remote){
 		}
 		//	Connection request - Stage 1	- Relay to stage 2
 		if (message.c == 'cr1'){
-			var fromUser = users[message.f];
+			var fromUser = clients[message.f];
 			var toUserName = message.u;
-			var toUser = users[message.u];
-			//	Send requester connection details to destination user
+			var toUser = clients[toUserName];
+			//	Send requester connection details to destination peer
 			message = JSON.stringify({c: 'cr2', u: message.f,
 									o: [fromUser.inner.host, fromUser.inner.port,
 									fromUser.outer.host, fromUser.outer.port]});
@@ -235,9 +286,9 @@ udp.on('message', function(message, remote){
 		output = {r: message.n};
 		//	Search Users
 		if (typeof message.su == 'string'){
-			for (var user in users)
-				if (user.indexOf(message.su) > -1)
-					output[user] = users[user].timestamp;
+			for (var peer in clients)
+				if (peer.indexOf(message.su) > -1)
+					output[peer] = clients[peer].timestamp;
 		}
 		output = JSON.stringify(output);
 		udpSend(output, remote.address, remote.port);
@@ -268,21 +319,22 @@ var http = httpLib.createServer(
 					res.end();
 				});
 		}
-		//	List users or search on servers
-		else if (url[0] == 'users'){
+		//	List clients or search on servers
+		else if (url[0] == 'peers'){
 			var output = {};
 			res.writeHead(200, {'Content-Type': 'application/json'});
 			if (url.length > 2){
 				if (url[1] == 'search'){
 					var progress = 0;
 					//	Search on all immidiate origin servers
+					//	TO DO: ALSO SEARCH PEERS
 					for (var i = 0; i < config.servers.length; i++)
 						new (function(server){
 							new udpt.request(server, udpport,
 								{su: url[2]},
 								function(err, reply){
 									//	Add to the final output/result
-									if (!err)
+									if (!err && reply != '')
 										output[server] = reply;
 									progress += 1;
 									//	Write to response once we have all search results collected/aggregated
@@ -295,16 +347,16 @@ var http = httpLib.createServer(
 						// No we are not doing this in http	/*new (function(i, q){httpLib.request({port: 8080, method: 'GET', host: config.servers[i], path: '/users/'+q},function(response){handlePost(response, function(apiData){output.push(apiData);progress += 1;if (progress == config.servers.length){res.write(JSON.stringify(output));res.end();}});}).on('error', function(err){console.log(err);}).end();})(i, url[2]);*/
 				}
 				else if (url[1] == 'connect'){
-					var user = url[2].split('@');
-					if (config.username == user[0]){
+					var peer = url[2].split('@');
+					if (config.username == peer[0]){
 						//	That would be pretty ugly :D - no srsly..
 						res.write(JSON.stringify({error: 'You cannot connect p2p to yourself'}));
 						res.end();
 					}
 					else{
 						//	Initiate p2p connection chain reaction
-						message = JSON.stringify({c: 'cr1', u: user[0], f: config.username});
-						udpSend(message, user[1], udpport);
+						message = JSON.stringify({c: 'cr1', u: peer[0], f: config.username});
+						udpSend(message, peer[1], udpport);
 						res.write(JSON.stringify({message: 'Connection request sent'}));
 						res.end();
 					}
@@ -314,10 +366,10 @@ var http = httpLib.createServer(
 				}
 			}
 			else{
-				//	Just list all the users connected to this immidiate node
-				for (var user in users)
-					if (url.length == 1 || user.indexOf(url[1]) > -1)
-						output[user] = users[user].timestamp;
+				//	Just list all the peers connected to this immidiate node
+				for (var peer in clients)
+					if (url.length == 1 || peer.indexOf(url[1]) > -1)
+						output[peer] = clients[peer].timestamp;
 				res.write(JSON.stringify(output));
 				res.end();
 			}

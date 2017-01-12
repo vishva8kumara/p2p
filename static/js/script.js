@@ -37,48 +37,58 @@ new arc.nav('connect', arc.q('#connect')[0],
 		var list = context.q('ul')[0];
 		var form = context.q('form')[0];
 		form.obj.onsubmit = function(){
-			//	/*new arc.ajax('users/'+this.q.value, {callback: function(res){data = res.data;list.html('');for (var user in data)list.a(arc.elem('li', user));}});*/
-			new arc.ajax('users/search/'+this.q.value, {
+			//	/*new arc.ajax('peers/'+this.q.value, {callback: function(res){data = res.data;list.html('');for (var peer in data)list.a(arc.elem('li', peer));}});*/
+			new arc.ajax('peers/search/'+this.q.value, {
 				callback: function(res){
 					data = res.data;
 					list.html('');
+					var found = false;
 					for (var server in data){
 						var usr, subList = list.a(arc.elem('li', server)).a(arc.elem('ul'));
 						//subList = subList;
-						for (var user in data[server]){
-							usr = subList.a(arc.elem('li', user+' ', {'data-uname': user+'@'+server, 'data-code': data[server][user]}));
+						for (var peer in data[server]){
+							usr = subList.a(arc.elem('li', peer+' ', {'data-uname': peer+'@'+server, 'data-code': data[server][peer]}));
 							usr.a(arc.elem('input', null, {type: 'button', value: 'Connect'}))
 								.obj.onclick = function(){
-									new arc.ajax('users/connect/'+this.parentNode.getAttribute('data-uname'), {
+									new arc.ajax('peers/connect/'+this.parentNode.getAttribute('data-uname'), {
 										callback: function(res){
 										}
 									});
 								};
 							usr.a(arc.elem('input', null, {type: 'button', value: 'Remember'}))
 								.obj.onclick = function(){
-									new arc.ajax('users/remember/'+this.parentNode.getAttribute('data-uname'), {
+									new arc.ajax('peers/remember/'+this.parentNode.getAttribute('data-uname'), {
 										callback: function(res){
 										}
 									});
 								};
+							found = true;
 						}
 					}
+					if (!found)
+						list.a(arc.elem('li', '<i>No matching peers found on connected servers.</i>'));
 				}
 			});
 			return false;
 		};
 	});
 
-new arc.nav('users', arc.q('#users')[0],
+new arc.nav('peers', arc.q('#peers')[0],
 	function(context, params){
 		var list = context.q('ul')[0];
-		var data = {};//data.data[user]
-		new arc.ajax('users', {
+		var data = {};//data.data[peer]
+		list.html('');
+		var found = false;
+		new arc.ajax('peers', {
 			callback: function(res){
 				data = res.data;
-				list.html('');
-				for (var user in data)
-					list.a(arc.elem('li', user));
+				for (var peer in data){
+					list.a(arc.elem('li', peer));
+					found = true;
+				}
+				if (!found)
+					list.a(arc.elem('li', '<i>You still don\'t have peers connected to this node.</i>'));
+					//list.html('<li><i>You still don\'t have peers connected to this node.</i></li>');
 			}
 		});
 	});
